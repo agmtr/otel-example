@@ -22,6 +22,14 @@ datasources:
     url: http://jaeger-all-in-one:16686
     editable: true
     isDefault: false
+    jsonData:
+      tracesToLogs:
+        datasourceUid: opensearch
+        mapTagNamesEnabled: false
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '1h'
+        filterByTraceID: false
+        filterBySpanID: false
 
   - name: opensearch-cluster
     uid: opensearch
