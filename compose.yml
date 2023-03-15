@@ -1,0 +1,123 @@
+x-logging: &logging
+  driver: fluentd
+
+services:
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - ./fluent-parsers.conf:/fluent-bit/etc/fluent-parsers.conf
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      TZ: "Europe/Moscow"
+      GF_AUTH_ANONYMOUS_ENABLED: true
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    ports:
+      - "3000:3000"
+
+  opensearch-cluster:
+    image: opensearchproject/opensearch:latest
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+
+  jaeger-all-in-one:
+    image: jaegertracing/all-in-one:latest
+    restart: always
+    ports:
+      - "16686:16686"
+      - "14268"
+      - "14250"
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    restart: always
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: always
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "1888:1888"
+      - "8888:8888"
+      - "8889:8889"
+      - "8006:8006"
+      - "13133:13133"
+      - "4317:4317"
+      - "55679:55679"
+    depends_on:
+      - opensearch-cluster
+      - jaeger-all-in-one
+
+  opensearch-dashboards:
+      image: opensearchproject/opensearch-dashboards:latest
+      ports:
+        - 5601:5601
+      expose:
+        - "5601"
+      environment:
+        - 'OPENSEARCH_HOSTS=["http://opensearch-cluster:9200"]'
+        - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true"
+
+  client:
+    build:
+      context: ./client
+    restart: always
+    environment:
+      - OTLP_ENDPOINT=otel-collector:4317
+      - TARGET_URL=http://server:8081/ping
+    depends_on:
+      - fluent-bit
+      - server
+      - otel-collector
+    logging: *logging
+
+  server:
+    build:
+      context: ./server
+    restart: always
+    environment:
+      - OTLP_ENDPOINT=otel-collector:4317
+    ports:
+      - "8081"
+    depends_on:
+      - fluent-bit
+      - otel-collector
+    logging: *logging
+
+volumes:
+  prometheus-data:
+  opensearch-data:
+  grafana-data:
