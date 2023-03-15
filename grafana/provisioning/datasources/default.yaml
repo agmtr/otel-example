@@ -25,11 +25,6 @@ datasources:
     jsonData:
       tracesToLogs:
         datasourceUid: opensearch
-        mapTagNamesEnabled: false
-        spanStartTimeShift: '1h'
-        spanEndTimeShift: '1h'
-        filterByTraceID: false
-        filterBySpanID: false
 
   - name: opensearch-cluster
     uid: opensearch
